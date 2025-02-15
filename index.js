@@ -39,6 +39,6 @@ async function getAllFilePaths(dir) {
 
 // Usage
 (async () => {
-  const folderPath = "D:\\Freepik\\Assets\\test";
+  const folderPath = "D:\\Freepik\\Assets\\Interior";
   await getAllFilePaths(folderPath);
 })();

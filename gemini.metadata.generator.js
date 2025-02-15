@@ -87,10 +87,8 @@ const generate = async (path, type) => {
       .replace(/```$/, "")
       .trim();
     const parsedJson = JSON.parse(cleanedResponse);
-   
 
     const meteResult = await addImageMetadata(path, parsedJson);
-    c
 
     return "SEO metadata successfully generated and added.";
   } catch (error) {

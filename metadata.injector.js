@@ -29,7 +29,7 @@ async function addImageMetadata(imagePath, metadata) {
       throw new Error(`Unsupported image format: ${ext}`);
     }
 
-    const outputDir = path.join(path.dirname(imagePath), "processed");
+    const outputDir = path.join(path.dirname(imagePath), "succeed");
     await fs.mkdir(outputDir, { recursive: true });
 
     const outputPath = path.join(outputDir, path.basename(imagePath));
