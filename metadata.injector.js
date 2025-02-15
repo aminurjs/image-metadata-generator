@@ -78,7 +78,14 @@ async function handleJpegMetadata(inputPath, outputPath, metadata) {
   };
 
   await image
-    .withMetadata({ exif: exifMetadata, iptc: iptcMetadata })
+    .withMetadata({
+      exif: exifMetadata,
+      iptc: iptcMetadata,
+      resolveWithObject: true,
+      keepExif: true,
+      keepIptc: true,
+    })
+    .jpeg({ quality: 100, force: false }) // Preserve original quality
     .toFile(outputPath);
 }
 
@@ -94,7 +101,14 @@ async function handlePngMetadata(inputPath, outputPath, metadata) {
     Keywords: metadata.keywords.join(", "),
   };
 
-  await image.withMetadata({ png: { text: pngMetadata } }).toFile(outputPath);
+  await image
+    .withMetadata({
+      png: { text: pngMetadata },
+      resolveWithObject: true,
+      keepExif: true,
+    })
+    .png({ compressionLevel: 0, force: false }) // No compression
+    .toFile(outputPath);
 }
 
 /**
@@ -109,7 +123,14 @@ async function handleWebPMetadata(inputPath, outputPath, metadata) {
     Keywords: metadata.keywords.join(", "),
   };
 
-  await image.withMetadata({ webp: { xmp: webpMetadata } }).toFile(outputPath);
+  await image
+    .withMetadata({
+      webp: { xmp: webpMetadata },
+      resolveWithObject: true,
+      keepExif: true,
+    })
+    .webp({ quality: 100, lossless: true, force: false }) // Use lossless compression
+    .toFile(outputPath);
 }
 
 /**
@@ -124,7 +145,14 @@ async function handleTiffMetadata(inputPath, outputPath, metadata) {
     Keywords: metadata.keywords.join(";"),
   };
 
-  await image.withMetadata({ tiff: tiffMetadata }).toFile(outputPath);
+  await image
+    .withMetadata({
+      tiff: tiffMetadata,
+      resolveWithObject: true,
+      keepExif: true,
+    })
+    .tiff({ quality: 100, compression: "none", force: false }) // No compression
+    .toFile(outputPath);
 }
 
 module.exports = addImageMetadata;

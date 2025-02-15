@@ -78,7 +78,9 @@ const generate = async (path, type) => {
     });
 
     const result = await chatSession.sendMessage(
-      "Generate SEO details, returning only a JSON object."
+      `Please give me a long title of about 95 characters, description of about 95 characters   and 45 single SEO keywords based on the Microstock site about this image;
+
+Haram in Islam Do not use these keywords in any titles, descriptions, and keywords such as "thanksgiving, valentine, vintage, heaven, heavenly, retro, god, love, valentines, day, paradise, majestic, magic, rejuvenating, habitat, pristine, revival, residence, primitive, zen, graceful, fashion, cinema, movie, club, bar, matrix, nightlife, fantasy, sci-fi, romantic, wedding, party, Christmas, celebration, easter, winery, wine, spooky, majestic, pork, kaleidoscopic, mandala, bohemian, ethnic, folk, fairy tale, story, celestial, minimalistic, and others.`
     );
 
     const jsonResponse = result.response.text();
