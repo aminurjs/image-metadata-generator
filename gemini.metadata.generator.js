@@ -78,7 +78,7 @@ const generate = async (path, type) => {
     });
 
     const result = await chatSession.sendMessage(
-      `Please give me a long title of about 95 characters, description of about 95 characters   and 45 single SEO keywords based on the Microstock site about this image;
+      `Please give me a long perfect title of about 90 characters, description of about 120 characters and as realeted 45 single SEO keywords based on the Microstock site and follow (Anatomy of Titles: Style, Subject, Location or background) about this image, dont use (:, |) symbols in title and description;
 
 Haram in Islam Do not use these keywords in any titles, descriptions, and keywords such as "thanksgiving, valentine, vintage, heaven, heavenly, retro, god, love, valentines, day, paradise, majestic, magic, rejuvenating, habitat, pristine, revival, residence, primitive, zen, graceful, fashion, cinema, movie, club, bar, matrix, nightlife, fantasy, sci-fi, romantic, wedding, party, Christmas, celebration, easter, winery, wine, spooky, majestic, pork, kaleidoscopic, mandala, bohemian, ethnic, folk, fairy tale, story, celestial, minimalistic, and others.`
     );

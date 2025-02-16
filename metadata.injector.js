@@ -1,9 +1,13 @@
-const sharp = require("sharp");
+const exiftool = require("node-exiftool");
+const exiftoolBin = require("dist-exiftool");
 const fs = require("fs/promises");
 const path = require("path");
 
+// Create a new ExifTool process
+const ep = new exiftool.ExiftoolProcess(exiftoolBin);
+
 /**
- * Adds or updates metadata for various image formats
+ * Adds or updates metadata for various image formats using ExifTool
  * @param {string} imagePath - Path to the image file
  * @param {Object} metadata - Metadata to be added
  * @returns {Promise<Object>} - Object containing status and output path
@@ -34,125 +38,126 @@ async function addImageMetadata(imagePath, metadata) {
 
     const outputPath = path.join(outputDir, path.basename(imagePath));
 
-    switch (ext) {
-      case ".jpg":
-      case ".jpeg":
-        await handleJpegMetadata(imagePath, outputPath, metadata);
-        break;
-      case ".png":
-        await handlePngMetadata(imagePath, outputPath, metadata);
-        break;
-      case ".webp":
-        await handleWebPMetadata(imagePath, outputPath, metadata);
-        break;
-      case ".tiff":
-        await handleTiffMetadata(imagePath, outputPath, metadata);
-        break;
+    // Copy original file to output location
+    await fs.copyFile(imagePath, outputPath);
+
+    // Start ExifTool process
+    await ep.open();
+
+    // Prepare metadata based on format
+    const metadataToWrite = prepareMetadata(metadata, ext);
+
+    // Write metadata using ExifTool
+    await ep.writeMetadata(outputPath, metadataToWrite, ["overwrite_original"]);
+
+    // For PNG, do a second pass specifically for keywords
+    if (ext === ".png" && metadata.keywords && metadata.keywords.length > 0) {
+      // Write keywords separately
+      await ep.writeMetadata(
+        outputPath,
+        {
+          Keywords: metadata.keywords,
+          "XMP:Subject": metadata.keywords,
+          "XMP-dc:Subject": metadata.keywords,
+          "PNG:Keywords": metadata.keywords.join(";"),
+        },
+        ["overwrite_original"]
+      );
     }
 
-    return { status: "success", message: "Metadata added" };
+    // Verify metadata was written
+    const verifyMetadata = await ep.readMetadata(outputPath);
+
+    // Close ExifTool process
+    await ep.close();
+
+    if (
+      !verifyMetadata ||
+      !verifyMetadata.data ||
+      verifyMetadata.data.length === 0
+    ) {
+      throw new Error("Metadata verification failed");
+    }
+
+    return {
+      status: "success",
+      message: "Metadata added successfully",
+      outputPath,
+      verifiedMetadata: verifyMetadata.data[0],
+    };
   } catch (error) {
+    // Make sure to close ExifTool process even if there's an error
+    await ep.close();
     throw new Error(`Failed to add metadata: ${error.message}`);
   }
 }
 
 /**
- * Handle JPEG metadata
+ * Prepare metadata based on format
  * @private
  */
-async function handleJpegMetadata(inputPath, outputPath, metadata) {
-  const image = sharp(inputPath);
+function prepareMetadata(metadata, format) {
+  switch (format) {
+    case ".jpg":
+    case ".jpeg":
+      return {
+        "IPTC:ObjectName": metadata.title,
+        "IPTC:Caption-Abstract": metadata.description,
+        "IPTC:Keywords": metadata.keywords,
+        "XMP:Title": metadata.title,
+        "XMP:Description": metadata.description,
+        "XMP:Subject": metadata.keywords,
+        "EXIF:ImageDescription": metadata.description,
+        "EXIF:XPTitle": metadata.title,
+        "EXIF:XPKeywords": metadata.keywords
+          ? metadata.keywords.join(";")
+          : undefined,
+      };
 
-  const exifMetadata = {
-    IFD0: {
-      ImageDescription: metadata.description,
-      XPTitle: metadata.title,
-      XPKeywords: metadata.keywords.join(";"),
-    },
-  };
+    case ".png":
+      return {
+        // Title and Description
+        "PNG:Title": metadata.title,
+        "PNG:Description": metadata.description,
+        "XMP:Title": metadata.title,
+        "XMP:Description": metadata.description,
+        Description: metadata.description,
 
-  const iptcMetadata = {
-    ObjectName: metadata.title,
-    Caption: metadata.description,
-    Keywords: metadata.keywords,
-  };
+        // Multiple keyword formats
+        "XMP:Subject": metadata.keywords,
+        "XMP-dc:Subject": metadata.keywords,
+        Keywords: metadata.keywords,
+        "PNG:Keywords": metadata.keywords
+          ? metadata.keywords.map((k) => k.trim()).join(";")
+          : undefined,
+        "PNG-iTXt:Keywords": metadata.keywords
+          ? metadata.keywords.map((k) => k.trim()).join(";")
+          : undefined,
+      };
 
-  await image
-    .withMetadata({
-      exif: exifMetadata,
-      iptc: iptcMetadata,
-      resolveWithObject: true,
-      keepExif: true,
-      keepIptc: true,
-    })
-    .jpeg({ quality: 100, force: false }) // Preserve original quality
-    .toFile(outputPath);
-}
+    case ".webp":
+      return {
+        "XMP:Title": metadata.title,
+        "XMP:Description": metadata.description,
+        "XMP:Subject": metadata.keywords,
+      };
 
-/**
- * Handle PNG metadata
- * @private
- */
-async function handlePngMetadata(inputPath, outputPath, metadata) {
-  const image = sharp(inputPath);
-  const pngMetadata = {
-    Title: metadata.title,
-    Description: metadata.description,
-    Keywords: metadata.keywords.join(", "),
-  };
+    case ".tiff":
+      return {
+        "TIFF:ImageDescription": metadata.description,
+        "TIFF:DocumentName": metadata.title,
+        "XMP:Title": metadata.title,
+        "XMP:Description": metadata.description,
+        "XMP:Subject": metadata.keywords,
+      };
 
-  await image
-    .withMetadata({
-      png: { text: pngMetadata },
-      resolveWithObject: true,
-      keepExif: true,
-    })
-    .png({ compressionLevel: 0, force: false }) // No compression
-    .toFile(outputPath);
-}
-
-/**
- * Handle WebP metadata
- * @private
- */
-async function handleWebPMetadata(inputPath, outputPath, metadata) {
-  const image = sharp(inputPath);
-  const webpMetadata = {
-    Title: metadata.title,
-    Description: metadata.description,
-    Keywords: metadata.keywords.join(", "),
-  };
-
-  await image
-    .withMetadata({
-      webp: { xmp: webpMetadata },
-      resolveWithObject: true,
-      keepExif: true,
-    })
-    .webp({ quality: 100, lossless: true, force: false }) // Use lossless compression
-    .toFile(outputPath);
-}
-
-/**
- * Handle TIFF metadata
- * @private
- */
-async function handleTiffMetadata(inputPath, outputPath, metadata) {
-  const image = sharp(inputPath);
-  const tiffMetadata = {
-    ImageDescription: metadata.description,
-    DocumentName: metadata.title,
-    Keywords: metadata.keywords.join(";"),
-  };
-
-  await image
-    .withMetadata({
-      tiff: tiffMetadata,
-      resolveWithObject: true,
-      keepExif: true,
-    })
-    .tiff({ quality: 100, compression: "none", force: false }) // No compression
-    .toFile(outputPath);
+    default:
+      return {
+        Title: metadata.title,
+        Description: metadata.description,
+        Keywords: metadata.keywords,
+      };
+  }
 }
 
 module.exports = addImageMetadata;
