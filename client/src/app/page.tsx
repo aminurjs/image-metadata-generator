@@ -8,9 +8,10 @@ import {
   PencilIcon,
   CheckIcon,
   ArrowDownTrayIcon,
+  PhotoIcon,
 } from "@heroicons/react/24/outline";
 import { EditingState, MetadataResult } from "@/types";
-import { countWords, downloadCSV } from "@/actions";
+import { countWords, downloadCSV, downloadImagesAsZip } from "@/actions";
 import Image from "next/image";
 
 export default function Home() {
@@ -25,6 +26,10 @@ export default function Home() {
   const [editValue, setEditValue] = useState("");
   const [previews, setPreviews] = useState<{ [key: string]: string }>({});
   const [copyStatus, setCopyStatus] = useState<{ [key: string]: boolean }>({});
+  const [isDownloading, setIsDownloading] = useState<{
+    csv: boolean;
+    images: boolean;
+  }>({ csv: false, images: false });
 
   // Function to generate image previews
   const generatePreviews = useCallback((files: File[]) => {
@@ -252,13 +257,32 @@ export default function Home() {
             AI Metadata Generator
           </h1>
           {results.length > 0 && (
-            <button
-              onClick={() => downloadCSV(results)}
-              className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-            >
-              <ArrowDownTrayIcon className="h-5 w-5 mr-2" />
-              Export CSV
-            </button>
+            <div className="flex gap-4">
+              <button
+                onClick={() => downloadCSV(results, setIsDownloading)}
+                disabled={isDownloading.csv || isDownloading.images}
+                className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                {isDownloading.csv ? (
+                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent mr-2" />
+                ) : (
+                  <ArrowDownTrayIcon className="h-5 w-5 mr-2" />
+                )}
+                Export CSV
+              </button>
+              <button
+                onClick={() => downloadImagesAsZip(results, setIsDownloading)}
+                disabled={isDownloading.csv || isDownloading.images}
+                className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                {isDownloading.images ? (
+                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent mr-2" />
+                ) : (
+                  <PhotoIcon className="h-5 w-5 mr-2" />
+                )}
+                Download Images
+              </button>
+            </div>
           )}
         </div>
 
