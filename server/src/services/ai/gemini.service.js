@@ -8,6 +8,7 @@ import {
   FORBIDDEN_KEYWORDS,
   PROMPT,
 } from "../../constants/image.constants.js";
+import fs from "fs/promises";
 
 const fileManager = new GoogleAIFileManager(apiKey);
 
@@ -54,8 +55,14 @@ export async function generate(filePath, type, outputPath) {
 
     try {
       const result = await addImageMetadata(filePath, parsedJson, outputPath);
-      return result;
+      return { ...result, metadata: parsedJson };
     } catch (metadataError) {
+      // Clean up any created files in case of error
+      try {
+        await fs.unlink(path.join(outputPath, path.basename(filePath)));
+      } catch (cleanupError) {
+        console.error("Failed to cleanup file:", cleanupError);
+      }
       throw new Error(`Failed to add metadata: ${metadataError.message}`);
     }
   } catch (error) {

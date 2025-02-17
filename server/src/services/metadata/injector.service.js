@@ -71,10 +71,9 @@ export async function addImageMetadata(imagePath, metadata, outputDir) {
     }
 
     return {
-      status: "success",
+      status: true,
       message: "Metadata added successfully",
       outputPath,
-      verifiedMetadata: verifyMetadata.data[0],
     };
   } catch (error) {
     await ep.close();
