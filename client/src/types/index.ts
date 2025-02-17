@@ -4,7 +4,8 @@ export interface MetadataResult {
   title: string;
   description: string;
   keywords: string[];
-  status: "pending" | "processing" | "completed" | "failed";
+  status: "processing" | "completed" | "failed";
+  imageUrl: string;
   error?: string;
 }
 

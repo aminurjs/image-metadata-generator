@@ -4,6 +4,7 @@ import { fileURLToPath } from "url";
 import path from "path";
 import { processImageAndUpload } from "./controllers/image.controller.js";
 import { connectDB } from "./config/database.js";
+import cors from "cors";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,10 +21,19 @@ const storage = multer.diskStorage({
 });
 
 const app = express();
+
+// Add CORS middleware
+app.use(
+  cors({
+    origin: "http://localhost:3000",
+    credentials: true,
+  })
+);
+
 const upload = multer({
   storage: storage,
   limits: {
-    fileSize: 20 * 1024 * 1024, // 20MB limit
+    fileSize: 10 * 1024 * 1024, // 10MB limit
   },
 });
 

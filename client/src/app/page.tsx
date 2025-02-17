@@ -1,4 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
@@ -12,6 +11,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { EditingState, MetadataResult } from "@/types";
 import { countWords, downloadCSV } from "@/actions";
+import Image from "next/image";
 
 export default function Home() {
   const [files, setFiles] = useState<File[]>([]);
@@ -173,44 +173,70 @@ export default function Home() {
 
     try {
       for (const file of files) {
+        // Add to results with processing status first
+        const newResult: MetadataResult = {
+          id: crypto.randomUUID(),
+          fileName: file.name,
+          title: "",
+          description: "",
+          keywords: [],
+          status: "processing",
+          imageUrl: previews[file.name],
+        };
+
+        setResults((prev) => [...prev, newResult]);
+
         const formData = new FormData();
-        formData.append("file", file);
+        formData.append("image", file);
 
-        console.log(formData);
+        try {
+          const response = await fetch(
+            "http://localhost:5000/api/process-image",
+            {
+              method: "POST",
+              body: formData,
+            }
+          );
 
-        // const response = await fetch("/api/generate", {
-        //   method: "POST",
-        //   body: formData,
-        // });
+          const result = await response.json();
 
-        // const result = await response.json();
+          if (!response.ok) {
+            throw new Error(result.error || `Failed to process ${file.name}`);
+          }
 
-        // if (!response.ok) {
-        //   throw new Error(result.error || `Failed to process ${file.name}`);
-        // }
-
-        // // Add to results with initial status
-        // setResults((prev) => [
-        //   ...prev,
-        //   {
-        //     id: result.id,
-        //     fileName: file.name,
-        //     title: "",
-        //     description: "",
-        //     keywords: [],
-        //     status: "processing",
-        //   },
-        // ]);
-
-        // // Start polling for status
-        // let status;
-        // do {
-        //   await new Promise((resolve) => setTimeout(resolve, 2000)); // Poll every 2 seconds
-        //   status = await checkStatus(result.id);
-        // } while (status === "processing");
+          // Update results with success status and metadata
+          setResults((prev) =>
+            prev.map((item) =>
+              item.id === newResult.id
+                ? {
+                    ...item,
+                    title: result.data.metadata.title,
+                    description: result.data.metadata.description,
+                    keywords: result.data.metadata.keywords,
+                    status: "completed",
+                    imageUrl: result.data.imageUrl,
+                  }
+                : item
+            )
+          );
+        } catch (err) {
+          // Update results with failed status
+          setResults((prev) =>
+            prev.map((item) =>
+              item.id === newResult.id
+                ? {
+                    ...item,
+                    status: "failed",
+                    error:
+                      err instanceof Error ? err.message : "Processing failed",
+                  }
+                : item
+            )
+          );
+        }
       }
 
-      // setFiles([]); // Clear files after processing
+      setFiles([]); // Clear files after processing
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to process files");
     } finally {
@@ -322,13 +348,24 @@ export default function Home() {
                 <div key={result.id} className="p-4 bg-gray-50 rounded-lg">
                   <div className="flex justify-between items-start mb-4">
                     <div className="flex items-start space-x-4">
-                      {previews[result.fileName] && (
-                        <img
-                          src={previews[result.fileName]}
+                      <div className="relative w-24 h-24">
+                        <Image
+                          src={result.imageUrl || previews[result.fileName]}
                           alt={result.fileName}
-                          className="w-24 h-24 object-cover rounded-lg"
+                          fill
+                          className="object-cover rounded-lg"
                         />
-                      )}
+                        {result.status === "processing" && (
+                          <div className="absolute inset-0 bg-black bg-opacity-50 rounded-lg flex items-center justify-center">
+                            <div className="animate-spin rounded-full h-8 w-8 border-4 border-white border-t-transparent"></div>
+                          </div>
+                        )}
+                        {result.status === "failed" && (
+                          <div className="absolute inset-0 bg-red-500 bg-opacity-50 rounded-lg flex items-center justify-center">
+                            <XMarkIcon className="h-8 w-8 text-white" />
+                          </div>
+                        )}
+                      </div>
                       <div>
                         <h3 className="font-medium text-gray-800">
                           {result.fileName}
@@ -339,9 +376,7 @@ export default function Home() {
                               ? "bg-green-100 text-green-700"
                               : result.status === "processing"
                               ? "bg-blue-100 text-blue-700"
-                              : result.status === "failed"
-                              ? "bg-red-100 text-red-700"
-                              : "bg-gray-100 text-gray-700"
+                              : "bg-red-100 text-red-700"
                           }`}
                         >
                           {result.status.charAt(0).toUpperCase() +
