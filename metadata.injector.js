@@ -1,10 +1,10 @@
-const exiftool = require("node-exiftool");
-const exiftoolBin = require("dist-exiftool");
-const fs = require("fs/promises");
-const path = require("path");
+import { ExiftoolProcess } from "node-exiftool";
+import exiftoolBin from "dist-exiftool";
+import fs from "fs/promises";
+import path from "path";
 
 // Create a new ExifTool process
-const ep = new exiftool.ExiftoolProcess(exiftoolBin);
+const ep = new ExiftoolProcess(exiftoolBin);
 
 /**
  * Adds or updates metadata for various image formats using ExifTool
@@ -160,4 +160,4 @@ function prepareMetadata(metadata, format) {
   }
 }
 
-module.exports = addImageMetadata;
+export default addImageMetadata;

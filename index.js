@@ -1,7 +1,6 @@
-require("dotenv").config();
-const generate = require("./gemini.metadata.generator");
-const fs = require("fs");
-const path = require("path");
+import fs from "fs";
+import path from "path";
+import generate from "./gemini.metadata.generator.js";
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 

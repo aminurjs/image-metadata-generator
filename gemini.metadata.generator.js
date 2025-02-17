@@ -1,11 +1,14 @@
-const path = require("path");
-const {
+import path from "path";
+import addImageMetadata from "./metadata.injector.js";
+import { GoogleAIFileManager } from "@google/generative-ai/server";
+import {
   GoogleGenerativeAI,
   HarmCategory,
   HarmBlockThreshold,
-} = require("@google/generative-ai");
-const { GoogleAIFileManager } = require("@google/generative-ai/server");
-const addImageMetadata = require("./metadata.injector");
+} from "@google/generative-ai";
+import { config } from "dotenv";
+
+config();
 
 const apiKey = process.env.GEMINI_API_KEY;
 const genAI = new GoogleGenerativeAI(apiKey);
@@ -98,4 +101,4 @@ Haram in Islam Do not use these keywords in any titles, descriptions, and keywor
   }
 };
 
-module.exports = generate;
+export default generate;
