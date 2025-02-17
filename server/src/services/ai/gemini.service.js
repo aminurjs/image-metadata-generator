@@ -19,10 +19,9 @@ async function uploadToGemini(filePath, mimeType) {
   return uploadResult.file;
 }
 
-export async function generate(filePath, type) {
+export async function generate(filePath, type, outputPath) {
   try {
     const file = await uploadToGemini(filePath, `image/${type}`);
-
     const chatSession = model.startChat({
       generationConfig,
       safetySettings,
@@ -43,21 +42,22 @@ export async function generate(filePath, type) {
     });
 
     const forbiddenKeywordsStr = FORBIDDEN_KEYWORDS.join(", ");
-
-    const result = await chatSession.sendMessage(
+    const dataResult = await chatSession.sendMessage(
       `${PROMPT}: ${forbiddenKeywordsStr}`
     );
-
-    const jsonResponse = result.response.text();
+    const jsonResponse = dataResult.response.text();
     const cleanedResponse = jsonResponse
       .replace(/^```json/, "")
       .replace(/```$/, "")
       .trim();
     const parsedJson = JSON.parse(cleanedResponse);
 
-    await addImageMetadata(filePath, parsedJson);
-
-    return "SEO metadata successfully generated and added.";
+    try {
+      const result = await addImageMetadata(filePath, parsedJson, outputPath);
+      return result;
+    } catch (metadataError) {
+      throw new Error(`Failed to add metadata: ${metadataError.message}`);
+    }
   } catch (error) {
     throw new Error(`Error processing SEO metadata: ${error.message}`);
   }

@@ -25,7 +25,12 @@ function stopLoading() {
 // Function to process valid files
 async function processFile(filePath, ext, index, file) {
   try {
-    await generate(filePath, ext);
+    const result = await generate(
+      filePath,
+      ext,
+      "D:\\Freepik\\Assets\\Calligraphy\\test"
+    );
+    console.log(result);
     process.stdout.clearLine(0);
     process.stdout.cursorTo(0);
     console.log(`\x1b[32m%s\x1b[0m`, `${index + 1}. ${file} Success`);
