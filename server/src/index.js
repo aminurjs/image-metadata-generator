@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import generate from "./gemini.metadata.generator.js";
+import { generate } from "./services/ai/gemini.service.js";
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
