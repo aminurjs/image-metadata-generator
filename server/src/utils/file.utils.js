@@ -26,3 +26,15 @@ export async function validateImageFile(filePath) {
     };
   }
 }
+
+export async function cleanupFiles(filePaths) {
+  for (const filePath of filePaths) {
+    if (filePath) {
+      try {
+        await fs.unlink(filePath);
+      } catch (error) {
+        console.error(`Failed to delete file ${filePath}:`, error);
+      }
+    }
+  }
+}

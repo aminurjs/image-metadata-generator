@@ -4,12 +4,10 @@ import { fileURLToPath } from "url";
 import path from "path";
 import { createServer } from "http";
 import { Server } from "socket.io";
-import {
-  processImageAndUpload,
-  processMultipleImages,
-} from "./controllers/image.controller.js";
+import { processMultipleImages } from "./controllers/image.controller.js";
 import { connectDB } from "./config/database.js";
 import cors from "cors";
+import { config } from "./config/base.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -69,7 +67,7 @@ app.use(
   express.static(path.join(__dirname, "../public/uploads/processed"))
 );
 
-const PORT = process.env.PORT || 5000;
+const PORT = config.port;
 httpServer.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

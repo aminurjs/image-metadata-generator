@@ -1,10 +1,9 @@
 import { ProcessedImage } from "../../models/ProcessedImage.js";
 
-export async function saveImageData({ imageUrl, metadata }) {
+export async function saveImageData(data) {
   try {
     const processedImage = new ProcessedImage({
-      imageUrl,
-      metadata,
+      data,
     });
 
     const result = await processedImage.save();

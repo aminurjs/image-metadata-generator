@@ -1,11 +1,11 @@
 import { v2 as cloudinary } from "cloudinary";
-import { env } from "../../config/base.js";
+import { config } from "../../config/base.js";
 
 // Configure cloudinary
 cloudinary.config({
-  cloud_name: env.cloudinary.cloudName,
-  api_key: env.cloudinary.apiKey,
-  api_secret: env.cloudinary.apiSecret,
+  cloud_name: config.cloudinary.cloudName,
+  api_key: config.cloudinary.apiKey,
+  api_secret: config.cloudinary.apiSecret,
 });
 
 export async function uploadToCloudinary(filePath) {

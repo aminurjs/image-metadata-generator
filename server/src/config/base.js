@@ -1,8 +1,9 @@
-import { config } from "dotenv";
+import dotenv from "dotenv";
 
-config();
+dotenv.config();
 
-export const env = {
+export const config = {
+  port: process.env.PORT || 5000,
   geminiApiKey: process.env.GEMINI_API_KEY,
   db_uri: process.env.MONGODB_URI,
   cloudinary: {

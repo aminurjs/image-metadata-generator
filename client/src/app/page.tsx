@@ -169,7 +169,6 @@ export default function Home() {
     });
 
     socket.on("processProgress", (data: ProcessProgressData) => {
-      console.log(data);
       console.log(`Processed ${data.completed}/${data.total} images`);
 
       setResults((prev) => {
@@ -203,7 +202,8 @@ export default function Home() {
       socket.disconnect();
     });
 
-    socket.on("processComplete", () => {
+    socket.on("processComplete", (data) => {
+      console.log({ data });
       setProcessing(false);
       setFiles([]);
       socket.disconnect();
@@ -275,34 +275,6 @@ export default function Home() {
           <h1 className="text-4xl font-bold text-gray-800">
             AI Metadata Generator
           </h1>
-          {results.length > 0 && (
-            <div className="flex gap-4">
-              <button
-                onClick={() => downloadCSV(results, setIsDownloading)}
-                disabled={isDownloading.csv || isDownloading.images}
-                className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-              >
-                {isDownloading.csv ? (
-                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent mr-2" />
-                ) : (
-                  <ArrowDownTrayIcon className="h-5 w-5 mr-2" />
-                )}
-                Export CSV
-              </button>
-              <button
-                onClick={() => downloadImagesAsZip(results, setIsDownloading)}
-                disabled={isDownloading.csv || isDownloading.images}
-                className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-              >
-                {isDownloading.images ? (
-                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent mr-2" />
-                ) : (
-                  <PhotoIcon className="h-5 w-5 mr-2" />
-                )}
-                Download Images
-              </button>
-            </div>
-          )}
         </div>
 
         {/* Upload Area */}
@@ -383,41 +355,73 @@ export default function Home() {
         {/* Results with Previews and Counters */}
         {results.length > 0 && (
           <div className="bg-white p-6 rounded-lg shadow-sm">
-            <h2 className="text-xl font-semibold mb-4 text-gray-800">
-              Results
-            </h2>
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-xl font-semibold text-gray-800">Results</h2>
+              {results.length > 0 && (
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => downloadCSV(results, setIsDownloading)}
+                    disabled={isDownloading.csv || isDownloading.images}
+                    className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    {isDownloading.csv ? (
+                      <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent mr-2" />
+                    ) : (
+                      <ArrowDownTrayIcon className="h-5 w-5 mr-2" />
+                    )}
+                    Export CSV
+                  </button>
+                  <button
+                    onClick={() =>
+                      downloadImagesAsZip(results, setIsDownloading)
+                    }
+                    disabled={isDownloading.csv || isDownloading.images}
+                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    {isDownloading.images ? (
+                      <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent mr-2" />
+                    ) : (
+                      <PhotoIcon className="h-5 w-5 mr-2" />
+                    )}
+                    Download Images
+                  </button>
+                </div>
+              )}
+            </div>
             <div className="space-y-6">
               {results.map((result) => (
                 <div key={result.id} className="p-4 bg-gray-50 rounded-lg">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex items-start space-x-4">
-                      <div className="relative w-24 h-24">
-                        <Image
-                          src={
-                            `${result.imageUrl}` || previews[result.fileName]
-                          }
-                          width={300}
-                          height={300}
-                          alt={result.fileName}
-                          className="object-cover rounded-lg"
-                        />
-                        {result.status === "processing" && (
-                          <div className="absolute inset-0 bg-black bg-opacity-50 rounded-lg flex items-center justify-center">
-                            <div className="animate-spin rounded-full h-8 w-8 border-4 border-white border-t-transparent"></div>
-                          </div>
-                        )}
-                        {result.status === "failed" && (
-                          <div className="absolute inset-0 bg-red-500 bg-opacity-50 rounded-lg flex items-center justify-center">
-                            <XMarkIcon className="h-8 w-8 text-white" />
-                          </div>
-                        )}
-                      </div>
-                      <div>
-                        <h3 className="font-medium text-gray-800">
+                  <div className="flex gap-6">
+                    {/* Image Preview */}
+                    <div className="w-48 h-48 flex-shrink-0 relative">
+                      <Image
+                        src={`${result.imageUrl}` || previews[result.fileName]}
+                        width={300}
+                        height={300}
+                        alt={result.fileName}
+                        className="w-full h-full object-cover rounded-lg"
+                      />
+                      {result.status === "processing" && (
+                        <div className="absolute inset-0 bg-black bg-opacity-50 rounded-lg flex items-center justify-center">
+                          <div className="animate-spin rounded-full h-8 w-8 border-4 border-white border-t-transparent"></div>
+                        </div>
+                      )}
+                      {result.status === "failed" && (
+                        <div className="absolute inset-0 bg-red-500 bg-opacity-50 rounded-lg flex items-center justify-center">
+                          <XMarkIcon className="h-8 w-8 text-white" />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Metadata Content */}
+                    <div className="flex-1">
+                      {/* Filename and Status */}
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="font-medium text-gray-700 ellipsis-clamp">
                           {result.fileName}
                         </h3>
                         <span
-                          className={`inline-block px-2 py-1 rounded-full text-sm mt-2 ${
+                          className={`px-2 py-1 text-xs rounded-full ${
                             result.status === "completed"
                               ? "bg-green-100 text-green-700"
                               : result.status === "processing"
@@ -425,66 +429,46 @@ export default function Home() {
                               : "bg-red-100 text-red-700"
                           }`}
                         >
-                          {result.status
-                            ? result.status.charAt(0).toUpperCase() +
-                              result.status.slice(1)
-                            : "Unknown"}
+                          {result.status.charAt(0).toUpperCase() +
+                            result.status.slice(1)}
                         </span>
                       </div>
-                    </div>
-                  </div>
 
-                  {result.error && (
-                    <div className="mb-4 text-red-600 text-sm">
-                      Error: {result.error}
-                    </div>
-                  )}
-
-                  {result.status === "completed" && (
-                    <div className="space-y-4">
-                      {/* Title with Counter */}
-                      <div className="flex items-start justify-between">
-                        <div className="flex-grow">
-                          <div className="flex justify-between items-center">
-                            <span className="font-medium">Title:</span>
-                            <span className="text-sm text-gray-500">
-                              {result.title.length}/90 chars |{" "}
-                              {countWords(result.title)} words
-                            </span>
+                      {/* Title Section */}
+                      <div className="mb-4">
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="font-medium">Title:</span>
+                          <span className="text-sm text-gray-500">
+                            {result.title.length} | {countWords(result.title)}
+                          </span>
+                        </div>
+                        {editing.id === result.id &&
+                        editing.field === "title" ? (
+                          <div className="flex items-center mt-1">
+                            <input
+                              type="text"
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              className="w-full p-2 border rounded-lg mr-2"
+                            />
+                            <button
+                              onClick={() => saveEdit(result.id)}
+                              className="text-green-600 hover:text-green-700"
+                            >
+                              <CheckIcon className="h-5 w-5" />
+                            </button>
                           </div>
-                          {editing.id === result.id &&
-                          editing.field === "title" ? (
-                            <div className="flex items-center mt-1">
-                              <div className="flex-grow">
-                                <input
-                                  type="text"
-                                  value={editValue}
-                                  onChange={(e) => setEditValue(e.target.value)}
-                                  className="w-full p-2 border rounded-lg mr-2"
-                                  maxLength={90}
-                                />
-                                <div className="text-sm text-gray-500 mt-1">
-                                  {editValue.length}/90 chars |{" "}
-                                  {countWords(editValue)} words
-                                </div>
-                              </div>
-                              <button
-                                onClick={() => saveEdit(result.id)}
-                                className="text-green-600 hover:text-green-700 ml-2"
-                              >
-                                <CheckIcon className="h-5 w-5" />
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center mt-1">
-                              <p className="flex-grow">{result.title}</p>
+                        ) : (
+                          <div className="flex items-center">
+                            <p className="flex-grow text-sm">{result.title}</p>
+                            <div className="flex gap-2 ml-2">
                               <button
                                 onClick={() =>
                                   startEditing(result.id, "title", result.title)
                                 }
-                                className="text-gray-400 hover:text-gray-600 mx-2"
+                                className="text-gray-400 hover:text-gray-600"
                               >
-                                <PencilIcon className="h-5 w-5" />
+                                <PencilIcon className="h-4 w-4" />
                               </button>
                               <button
                                 onClick={() =>
@@ -497,94 +481,72 @@ export default function Home() {
                                 className="text-gray-400 hover:text-gray-600"
                               >
                                 {copyStatus[result.id + "title"] ? (
-                                  <CheckIcon className="h-5 w-5 text-green-600" />
+                                  <CheckIcon className="h-4 w-4 text-green-600" />
                                 ) : (
-                                  <ClipboardIcon className="h-5 w-5" />
+                                  <ClipboardIcon className="h-4 w-4" />
                                 )}
                               </button>
                             </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Description with Counter */}
-                      <div className="flex items-start justify-between">
-                        <div className="flex-grow">
-                          <div className="flex justify-between items-center">
-                            <span className="font-medium">Description:</span>
-                            <span className="text-sm text-gray-500">
-                              {result.description.length}/90 chars |{" "}
-                              {countWords(result.description)} words
-                            </span>
                           </div>
-                          {editing.id === result.id &&
-                          editing.field === "description" ? (
-                            <div className="flex items-start mt-1">
-                              <div className="flex-grow">
-                                <textarea
-                                  value={editValue}
-                                  onChange={(e) => setEditValue(e.target.value)}
-                                  className="w-full p-2 border rounded-lg mr-2"
-                                  rows={3}
-                                  maxLength={90}
-                                />
-                                <div className="text-sm text-gray-500 mt-1">
-                                  {editValue.length}/90 chars |{" "}
-                                  {countWords(editValue)} words
-                                </div>
-                              </div>
-                              <button
-                                onClick={() => saveEdit(result.id)}
-                                className="text-green-600 hover:text-green-700 ml-2"
-                              >
-                                <CheckIcon className="h-5 w-5" />
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center mt-1">
-                              <p className="flex-grow">{result.description}</p>
-                              <button
-                                onClick={() =>
-                                  startEditing(
-                                    result.id,
-                                    "description",
-                                    result.description
-                                  )
-                                }
-                                className="text-gray-400 hover:text-gray-600 mx-2"
-                              >
-                                <PencilIcon className="h-5 w-5" />
-                              </button>
-                              <button
-                                onClick={() =>
-                                  copyToClipboard(
-                                    result.description,
-                                    "description",
-                                    result.id
-                                  )
-                                }
-                                className="text-gray-400 hover:text-gray-600"
-                              >
-                                {copyStatus[result.id + "description"] ? (
-                                  <CheckIcon className="h-5 w-5 text-green-600" />
-                                ) : (
-                                  <ClipboardIcon className="h-5 w-5" />
-                                )}
-                              </button>
-                            </div>
-                          )}
+                        )}
+                      </div>
+
+                      {/* Description Section */}
+                      <div className="mb-4">
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="font-medium">Description:</span>
+                          <span className="text-sm text-gray-500">
+                            {result.description.length} |{" "}
+                            {countWords(result.description)}
+                          </span>
+                        </div>
+                        {/* Similar editing structure as title */}
+                        <div className="flex items-center">
+                          <p className="flex-grow text-sm">
+                            {result.description}
+                          </p>
+                          <div className="flex gap-2 ml-2">
+                            <button
+                              onClick={() =>
+                                startEditing(
+                                  result.id,
+                                  "description",
+                                  result.description
+                                )
+                              }
+                              className="text-gray-400 hover:text-gray-600"
+                            >
+                              <PencilIcon className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() =>
+                                copyToClipboard(
+                                  result.description,
+                                  "description",
+                                  result.id
+                                )
+                              }
+                              className="text-gray-400 hover:text-gray-600"
+                            >
+                              {copyStatus[result.id + "description"] ? (
+                                <CheckIcon className="h-4 w-4 text-green-600" />
+                              ) : (
+                                <ClipboardIcon className="h-4 w-4" />
+                              )}
+                            </button>
+                          </div>
                         </div>
                       </div>
 
-                      {/* Keywords with Counter */}
+                      {/* Keywords Section */}
                       <div>
-                        <div className="flex justify-between items-center">
+                        <div className="flex justify-between items-center mb-2">
                           <span className="font-medium">Keywords:</span>
-                          <div className="flex items-center space-x-4">
+                          <div className="flex items-center gap-4">
                             <span className="text-sm text-gray-500">
-                              {result.keywords.length}/25 keywords
+                              {result.keywords.length} keywords
                             </span>
-                            <div className="flex items-center">
+                            <div className="flex gap-2">
                               <button
                                 onClick={() =>
                                   startEditing(
@@ -593,9 +555,9 @@ export default function Home() {
                                     result.keywords
                                   )
                                 }
-                                className="text-gray-400 hover:text-gray-600 mx-2"
+                                className="text-gray-400 hover:text-gray-600"
                               >
-                                <PencilIcon className="h-5 w-5" />
+                                <PencilIcon className="h-4 w-4" />
                               </button>
                               <button
                                 onClick={() =>
@@ -608,55 +570,27 @@ export default function Home() {
                                 className="text-gray-400 hover:text-gray-600"
                               >
                                 {copyStatus[result.id + "keywords"] ? (
-                                  <CheckIcon className="h-5 w-5 text-green-600" />
+                                  <CheckIcon className="h-4 w-4 text-green-600" />
                                 ) : (
-                                  <ClipboardIcon className="h-5 w-5" />
+                                  <ClipboardIcon className="h-4 w-4" />
                                 )}
                               </button>
                             </div>
                           </div>
                         </div>
-                        {editing.id === result.id &&
-                        editing.field === "keywords" ? (
-                          <div className="flex items-start mt-2">
-                            <div className="flex-grow">
-                              <textarea
-                                value={editValue}
-                                onChange={(e) => setEditValue(e.target.value)}
-                                className="w-full p-2 border rounded-lg mr-2"
-                                rows={3}
-                                placeholder="Enter keywords separated by commas"
-                              />
-                              <div className="text-sm text-gray-500 mt-1">
-                                {
-                                  editValue.split(",").filter((k) => k.trim())
-                                    .length
-                                }
-                                /25 keywords
-                              </div>
-                            </div>
-                            <button
-                              onClick={() => saveEdit(result.id)}
-                              className="text-green-600 hover:text-green-700 ml-2"
+                        <div className="flex flex-wrap gap-2">
+                          {result.keywords.map((keyword, idx) => (
+                            <span
+                              key={idx}
+                              className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs"
                             >
-                              <CheckIcon className="h-5 w-5" />
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            {result.keywords?.map((keyword, idx) => (
-                              <span
-                                key={idx}
-                                className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-sm"
-                              >
-                                {keyword}
-                              </span>
-                            ))}
-                          </div>
-                        )}
+                              {keyword}
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  )}
+                  </div>
                 </div>
               ))}
             </div>
