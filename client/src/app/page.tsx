@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   ArrowUpTrayIcon,
   XMarkIcon,
@@ -10,8 +10,10 @@ import {
   ArrowDownTrayIcon,
   PhotoIcon,
 } from "@heroicons/react/24/outline";
-import { EditingState, MetadataResult } from "@/types";
+import { EditingState, MetadataResult, ProcessProgressData } from "@/types";
 import { countWords, downloadCSV, downloadImagesAsZip } from "@/actions";
+import { io } from "socket.io-client";
+import { Socket } from "socket.io-client";
 import Image from "next/image";
 
 export default function Home() {
@@ -30,6 +32,9 @@ export default function Home() {
     csv: boolean;
     images: boolean;
   }>({ csv: false, images: false });
+
+  // Add socket ref
+  const socketRef = useRef<Socket | null>(null);
 
   // Function to generate image previews
   const generatePreviews = useCallback((files: File[]) => {
@@ -145,107 +150,121 @@ export default function Home() {
     setEditValue("");
   };
 
-  const checkStatus = async (id: string) => {
-    try {
-      const response = await fetch(`/api/generate?id=${id}`);
-      if (!response.ok) return;
+  // Remove the useEffect for socket initialization and move the socket setup to a new function
+  const setupSocket = () => {
+    const socket = io("http://localhost:5000", {
+      transports: ["websocket"],
+      autoConnect: true,
+    });
 
-      const data = await response.json();
-      setResults((prev) =>
-        prev.map((result) =>
-          result.id === id
-            ? {
-                ...result,
-                status: data.status,
-                title: data.title,
-                description: data.description,
-                keywords: JSON.parse(data.keywords),
-                error: data.error,
-              }
-            : result
-        )
-      );
+    socketRef.current = socket;
 
-      return data.status;
-    } catch (error) {
-      console.error("Error checking status:", error);
-    }
+    socket.on("connect", () => {
+      console.log("Connected to server");
+    });
+
+    socket.on("processStart", (data: { total: number }) => {
+      console.log(`Starting to process ${data.total} images`);
+      setProcessing(true);
+    });
+
+    socket.on("processProgress", (data: ProcessProgressData) => {
+      console.log(data);
+      console.log(`Processed ${data.completed}/${data.total} images`);
+
+      setResults((prev) => {
+        const existingIndex = prev.findIndex(
+          (r) => r.fileName === data.currentResult.filename
+        );
+
+        const updatedResult: MetadataResult = {
+          id: data.currentResult.id,
+          fileName: data.currentResult.filename,
+          title: data.currentResult.metadata.title,
+          description: data.currentResult.metadata.description,
+          keywords: data.currentResult.metadata.keywords,
+          status:
+            data.currentResult.status === "progress"
+              ? "processing"
+              : "completed",
+          imageUrl: `http://localhost:5000${data.currentResult.imageUrl}`,
+        };
+
+        if (existingIndex >= 0) {
+          return prev.map((r, i) => (i === existingIndex ? updatedResult : r));
+        }
+        return [...prev, updatedResult];
+      });
+    });
+
+    socket.on("processError", (data: { error: string }) => {
+      setError(data.error);
+      setProcessing(false);
+      socket.disconnect();
+    });
+
+    socket.on("processComplete", () => {
+      setProcessing(false);
+      setFiles([]);
+      socket.disconnect();
+    });
+
+    socket.on("disconnect", () => {
+      console.log("Disconnected from server");
+      socketRef.current = null;
+    });
+
+    return socket;
   };
 
+  // Update the processFiles function to handle socket connection
   const processFiles = async () => {
     setProcessing(true);
     setError(null);
 
     try {
-      for (const file of files) {
-        // Add to results with processing status first
-        const newResult: MetadataResult = {
-          id: crypto.randomUUID(),
-          fileName: file.name,
-          title: "",
-          description: "",
-          keywords: [],
-          status: "processing",
-          imageUrl: previews[file.name],
-        };
-
-        setResults((prev) => [...prev, newResult]);
-
-        const formData = new FormData();
-        formData.append("image", file);
-
-        try {
-          const response = await fetch(
-            "http://localhost:5000/api/process-image",
-            {
-              method: "POST",
-              body: formData,
-            }
-          );
-
-          const result = await response.json();
-
-          if (!response.ok) {
-            throw new Error(result.error || `Failed to process ${file.name}`);
-          }
-
-          // Update results with success status and metadata
-          setResults((prev) =>
-            prev.map((item) =>
-              item.id === newResult.id
-                ? {
-                    ...item,
-                    title: result.data.metadata.title,
-                    description: result.data.metadata.description,
-                    keywords: result.data.metadata.keywords,
-                    status: "completed",
-                    imageUrl: result.data.imageUrl,
-                  }
-                : item
-            )
-          );
-        } catch (err) {
-          // Update results with failed status
-          setResults((prev) =>
-            prev.map((item) =>
-              item.id === newResult.id
-                ? {
-                    ...item,
-                    status: "failed",
-                    error:
-                      err instanceof Error ? err.message : "Processing failed",
-                  }
-                : item
-            )
-          );
-        }
+      // Setup socket connection before processing
+      if (!socketRef.current) {
+        setupSocket();
       }
 
-      setFiles([]); // Clear files after processing
+      const formData = new FormData();
+      files.forEach((file) => {
+        formData.append("images", file);
+      });
+
+      // Add initial results with processing status
+      const initialResults: MetadataResult[] = files.map((file) => ({
+        id: crypto.randomUUID(),
+        fileName: file.name,
+        title: "",
+        description: "",
+        keywords: [],
+        status: "processing" as const,
+        imageUrl: previews[file.name],
+      }));
+
+      setResults((prev) => [...prev, ...initialResults]);
+
+      const response = await fetch("http://localhost:5000/api/process-images", {
+        method: "POST",
+        body: formData,
+      });
+
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.message);
+      }
+
+      console.log(`Started processing ${result.totalImages} images`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to process files");
-    } finally {
       setProcessing(false);
+      // Disconnect socket on error
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
     }
   };
 
@@ -374,9 +393,12 @@ export default function Home() {
                     <div className="flex items-start space-x-4">
                       <div className="relative w-24 h-24">
                         <Image
-                          src={result.imageUrl || previews[result.fileName]}
+                          src={
+                            `${result.imageUrl}` || previews[result.fileName]
+                          }
+                          width={300}
+                          height={300}
                           alt={result.fileName}
-                          fill
                           className="object-cover rounded-lg"
                         />
                         {result.status === "processing" && (
@@ -403,8 +425,10 @@ export default function Home() {
                               : "bg-red-100 text-red-700"
                           }`}
                         >
-                          {result.status.charAt(0).toUpperCase() +
-                            result.status.slice(1)}
+                          {result.status
+                            ? result.status.charAt(0).toUpperCase() +
+                              result.status.slice(1)
+                            : "Unknown"}
                         </span>
                       </div>
                     </div>

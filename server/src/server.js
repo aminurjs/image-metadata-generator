@@ -2,7 +2,12 @@ import express from "express";
 import multer from "multer";
 import { fileURLToPath } from "url";
 import path from "path";
-import { processImageAndUpload } from "./controllers/image.controller.js";
+import { createServer } from "http";
+import { Server } from "socket.io";
+import {
+  processImageAndUpload,
+  processMultipleImages,
+} from "./controllers/image.controller.js";
 import { connectDB } from "./config/database.js";
 import cors from "cors";
 
@@ -12,17 +17,25 @@ const __dirname = path.dirname(__filename);
 // Connect to MongoDB
 connectDB();
 
-// Configure multer storage
-const storage = multer.diskStorage({
-  destination: "uploads/",
-  filename: (req, file, cb) => {
-    cb(null, file.originalname); // Keep original filename with extension
+const app = express();
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: "http://localhost:3000",
+    credentials: true,
   },
 });
 
-const app = express();
+// Configure multer storage
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "public/uploads/original/");
+  },
+  filename: (req, file, cb) => {
+    cb(null, file.originalname);
+  },
+});
 
-// Add CORS middleware
 app.use(
   cors({
     origin: "http://localhost:3000",
@@ -37,10 +50,27 @@ const upload = multer({
   },
 });
 
-app.post("/api/process-image", upload.single("image"), processImageAndUpload);
+// Socket.IO connection handler
+io.on("connection", (socket) => {
+  console.log("Client connected:", socket.id);
+
+  socket.on("disconnect", () => {
+    console.log("Client disconnected:", socket.id);
+  });
+});
+
+// Change to handle multiple images
+app.post("/api/process-images", upload.array("images", 10), (req, res) =>
+  processMultipleImages(req, res, io)
+);
+
+app.use(
+  "/processed",
+  express.static(path.join(__dirname, "../public/uploads/processed"))
+);
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+httpServer.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
 
