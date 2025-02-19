@@ -4,7 +4,11 @@ import { fileURLToPath } from "url";
 import path from "path";
 import { createServer } from "http";
 import { Server } from "socket.io";
-import { processMultipleImages } from "./controllers/image.controller.js";
+import {
+  clearProcessedDirectory,
+  downloadProcessedImages,
+  processMultipleImages,
+} from "./controllers/image.controller.js";
 import { connectDB } from "./config/database.js";
 import cors from "cors";
 import { config } from "./config/base.js";
@@ -19,7 +23,7 @@ const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: "http://localhost:3000",
+    origin: config.corsOrigin,
     credentials: true,
   },
 });
@@ -36,7 +40,7 @@ const storage = multer.diskStorage({
 
 app.use(
   cors({
-    origin: "http://localhost:3000",
+    origin: config.corsOrigin,
     credentials: true,
   })
 );
@@ -62,9 +66,11 @@ app.post("/api/process-images", upload.array("images", 10), (req, res) =>
   processMultipleImages(req, res, io)
 );
 
+app.get("/api/images/download/:requestId", downloadProcessedImages);
+
 app.use(
   "/processed",
-  express.static(path.join(__dirname, "../public/uploads/processed"))
+  express.static(path.join(__dirname, "../public/processed"))
 );
 
 const PORT = config.port;
@@ -78,3 +84,5 @@ process.on("unhandledRejection", (err) => {
   console.log(err.name, err.message);
   process.exit(1);
 });
+
+clearProcessedDirectory();

@@ -2,6 +2,15 @@ import mongoose from "mongoose";
 
 const processedImageSchema = new mongoose.Schema(
   {
+    id: {
+      type: String,
+      required: true,
+    },
+    downloadable: {
+      type: Boolean,
+      required: true,
+      default: true,
+    },
     data: [
       {
         _id: {

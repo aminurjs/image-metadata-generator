@@ -1,9 +1,10 @@
-import { generate } from "../services/ai/gemini.service.js";
-import { uploadToCloudinary } from "../services/cloudinary/cloudinary.service.js";
-import { saveImageData } from "../services/db/db.service.js";
-import { cleanupFiles } from "../utils/file.utils.js";
+import {
+  saveImageData,
+  updateDownloadable,
+} from "../services/db/db.service.js";
 import fs from "fs/promises";
-import path from "path";
+import fsSync from "fs";
+import archiver from "archiver";
 import { processOneImage } from "../services/image/image-processing.service.js";
 import {
   emitProcessComplete,
@@ -11,65 +12,10 @@ import {
   emitProcessProgress,
   emitProcessStart,
 } from "../services/socket/socket.service.js";
+import { v4 as uuidv4 } from "uuid";
+import path from "path";
 
-const PROCESSED_DIR = "public/uploads/processed";
-
-export async function processImageAndUpload(req, res) {
-  if (!req.file) {
-    return res.status(400).json({ error: "No image file provided" });
-  }
-
-  const tempOutputDir = path.join("uploads", "processed");
-  let processedFilePath = null;
-
-  try {
-    // Create temp output directory if it doesn't exist
-    await fs.mkdir(tempOutputDir, { recursive: true });
-
-    const fileExtension = path
-      .extname(req.file.originalname)
-      .toLowerCase()
-      .slice(1);
-
-    // Process the image with AI and add metadata
-    const generateResult = await generate(
-      req.file.path,
-      fileExtension,
-      tempOutputDir
-    );
-
-    processedFilePath = generateResult.outputPath;
-
-    // Upload to Cloudinary
-    const cloudinaryResult = await uploadToCloudinary(processedFilePath);
-
-    // Save to database
-    const dbResult = await saveImageData({
-      imageUrl: cloudinaryResult.secure_url,
-      metadata: generateResult.metadata,
-    });
-
-    // Clean up temporary files
-    await cleanupFiles([req.file.path, processedFilePath]);
-
-    res.json({
-      success: true,
-      data: {
-        id: dbResult.id,
-        imageUrl: dbResult.imageUrl,
-        metadata: dbResult.metadata,
-      },
-    });
-  } catch (error) {
-    // Cleanup any files if they exist
-    await cleanupFiles([req.file.path, processedFilePath]);
-
-    res.status(500).json({
-      error: "Failed to process image",
-      message: error.message,
-    });
-  }
-}
+const PROCESSED_DIR = "public/processed";
 
 export async function processMultipleImages(req, res, io) {
   if (!req.files || req.files.length === 0) {
@@ -77,8 +23,10 @@ export async function processMultipleImages(req, res, io) {
   }
 
   try {
-    // Create processed directory if it doesn't exist
-    await fs.mkdir(PROCESSED_DIR, { recursive: true });
+    // Create a unique directory for each request
+    const requestId = uuidv4();
+    const requestDir = path.join(PROCESSED_DIR, requestId);
+    await fs.mkdir(requestDir, { recursive: true });
 
     const results = [];
     let completedCount = 0;
@@ -90,7 +38,7 @@ export async function processMultipleImages(req, res, io) {
     // Process each image
     for (const file of req.files) {
       try {
-        const result = await processOneImage(file, PROCESSED_DIR);
+        const result = await processOneImage(file, requestDir, requestId);
         results.push(result);
         completedCount++;
 
@@ -103,13 +51,30 @@ export async function processMultipleImages(req, res, io) {
     }
 
     // Emit completion message to all clients
-    emitProcessComplete(io, results);
-    await saveImageData(results);
+    const dbResult = await saveImageData(requestId, results);
+
+    emitProcessComplete(io, dbResult);
+
+    // Schedule directory deletion after 10 minutes (600,000 ms)
+    setTimeout(async () => {
+      try {
+        await fs.rm(requestDir, { recursive: true, force: true });
+        await updateDownloadable(requestId);
+        console.log(`Deleted directory: ${requestDir}`);
+      } catch (deleteError) {
+        console.error(
+          `Error deleting directory ${requestDir}:`,
+          deleteError.message
+        );
+      }
+    }, 10 * 60 * 1000); // 10 minutes
+
     // Send response to the original request
     res.json({
       success: true,
       message: "Processing started",
       totalImages,
+      requestId, // Send back the request ID for reference
     });
   } catch (error) {
     io.emit("processError", {
@@ -121,5 +86,93 @@ export async function processMultipleImages(req, res, io) {
       error: "Failed to process images",
       message: error.message,
     });
+  }
+}
+
+export async function downloadProcessedImages(req, res) {
+  const { requestId } = req.params;
+  const requestDir = path.join(PROCESSED_DIR, requestId);
+  const zipPath = path.join(PROCESSED_DIR, `${requestId}.zip`);
+
+  try {
+    // Check if directory exists
+    const dirExists = await fs
+      .access(requestDir)
+      .then(() => true)
+      .catch(() => false);
+
+    if (!dirExists) {
+      return res.status(404).json({ error: "Directory not found or expired" });
+    }
+
+    // Create a ZIP archive
+    const output = fsSync.createWriteStream(zipPath);
+    const archive = archiver("zip", { zlib: { level: 9 } });
+
+    archive.pipe(output);
+    archive.directory(requestDir, false);
+
+    // Ensure ZIP file is finalized before proceeding
+    await archive.finalize();
+
+    output.on("close", async () => {
+      res.download(zipPath, `${requestId}.zip`, async (err) => {
+        if (err) {
+          console.error("Error sending ZIP file:", err.message);
+          return res.status(500).json({ error: "Failed to send ZIP file" });
+        }
+        // Optionally delete the ZIP file after download
+        try {
+          await fs.rm(zipPath, { force: true });
+        } catch (rmError) {
+          console.error("Error deleting ZIP file:", rmError.message);
+        }
+      });
+    });
+
+    output.on("error", async (err) => {
+      console.error("Error creating ZIP file:", err.message);
+      await fs.rm(zipPath, { force: true });
+      res.status(500).json({ error: "Failed to create ZIP" });
+    });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ error: "Internal Server Error", message: error.message });
+  }
+}
+
+export async function clearProcessedDirectory() {
+  try {
+    // Ensure processed directory exists
+    await fs
+      .access(PROCESSED_DIR)
+      .catch(() => fs.mkdir(PROCESSED_DIR, { recursive: true }));
+
+    // Read all folders inside the processed directory
+    const folders = await fs.readdir(PROCESSED_DIR);
+
+    if (folders.length === 0) {
+      console.log("No existing processed folders to clean up.");
+      return;
+    }
+
+    console.log(
+      `Found ${folders.length} processed folders. Updating database...`
+    );
+
+    // Delete all folders after updating DB
+    for (const folder of folders) {
+      const folderPath = path.join(PROCESSED_DIR, folder);
+      await fs.rm(folderPath, { recursive: true, force: true });
+      await updateDownloadable(folder);
+      console.log(`Deleted folder: ${folderPath}`);
+    }
+
+    console.log(
+      "Database updated and processed directory cleaned up successfully."
+    );
+  } catch (error) {
+    console.error("Error processing and clearing folders:", error.message);
   }
 }
