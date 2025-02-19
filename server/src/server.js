@@ -6,12 +6,12 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import {
   clearProcessedDirectory,
-  downloadProcessedImages,
   processMultipleImages,
 } from "./controllers/image.controller.js";
 import { connectDB } from "./config/database.js";
 import cors from "cors";
 import { config } from "./config/base.js";
+import imageRoute from "./routes/image.routes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -38,6 +38,7 @@ const storage = multer.diskStorage({
   },
 });
 
+app.use(express.json());
 app.use(
   cors({
     origin: config.corsOrigin,
@@ -66,7 +67,7 @@ app.post("/api/process-images", upload.array("images", 10), (req, res) =>
   processMultipleImages(req, res, io)
 );
 
-app.get("/api/images/download/:requestId", downloadProcessedImages);
+app.use("/api/images", imageRoute);
 
 app.use(
   "/processed",

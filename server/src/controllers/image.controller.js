@@ -15,7 +15,7 @@ import {
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
 
-const PROCESSED_DIR = "public/processed";
+export const PROCESSED_DIR = "public/processed";
 
 export async function processMultipleImages(req, res, io) {
   if (!req.files || req.files.length === 0) {
