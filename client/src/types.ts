@@ -21,13 +21,14 @@ export interface SocketEvents {
   processStart: (data: { total: number }) => void;
   processProgress: (data: ProcessProgressData) => void;
   processError: (data: { error: string }) => void;
-  processComplete: () => void;
+  processComplete: (data: ProcessCompleteData) => void;
 }
 
 export type AppSocket = Socket<SocketEvents>;
 
 export interface ServerMetadataResponse {
-  id: string;
+  _id?: string;
+  id?: string;
   filename: string;
   imageUrl: string;
   status: string;
@@ -42,4 +43,13 @@ export interface ProcessProgressData {
   completed: number;
   total: number;
   currentResult: ServerMetadataResponse;
+}
+
+export interface ProcessCompleteData {
+  status: string;
+  results: {
+    id: string;
+    downloadable: boolean;
+    data: Array<ServerMetadataResponse>;
+  };
 }

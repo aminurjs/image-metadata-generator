@@ -10,7 +10,12 @@ import {
   ArrowDownTrayIcon,
   PhotoIcon,
 } from "@heroicons/react/24/outline";
-import { EditingState, MetadataResult, ProcessProgressData } from "@/types";
+import {
+  EditingState,
+  MetadataResult,
+  ProcessProgressData,
+  ServerMetadataResponse,
+} from "@/types";
 import { countWords, downloadCSV, downloadImagesAsZip } from "@/actions";
 import { io } from "socket.io-client";
 import { Socket } from "socket.io-client";
@@ -32,6 +37,13 @@ export default function Home() {
     csv: boolean;
     images: boolean;
   }>({ csv: false, images: false });
+  const [downloadInfo, setDownloadInfo] = useState<{
+    id: string;
+    downloadable: boolean;
+  }>({
+    id: "",
+    downloadable: false,
+  });
 
   // Add socket ref
   const socketRef = useRef<Socket | null>(null);
@@ -108,41 +120,47 @@ export default function Home() {
       const result = results.find((r) => r.id === id);
       if (!result || !editing.field) return;
 
-      let updatedValue = editValue as string | string[];
+      const updateData: { [key: string]: string | string[] } = {};
+
+      // Only include the field being edited
       if (editing.field === "keywords") {
-        updatedValue = editValue
+        updateData[editing.field] = editValue
           .split(",")
           .map((k) => k.trim())
           .filter((k) => k);
+      } else {
+        updateData[editing.field] = editValue;
       }
 
-      console.log(updatedValue);
+      // Add check for imageUrl
+      if (!result.imageUrl) return;
 
-      // const response = await fetch(`/api/generate/${id}`, {
-      //   method: "PATCH",
-      //   headers: {
-      //     "Content-Type": "application/json",
-      //   },
-      //   body: JSON.stringify({
-      //     [editing.field]: updatedValue,
-      //   }),
-      // });
+      const response = await fetch(`http://localhost:5000/api/images/update`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          imagePath: result.imageUrl.replace("http://localhost:5000", ""),
+          _id: result.id,
+          updateData,
+        }),
+      });
 
-      // if (response.ok) {
-      //   setResults((prev) =>
-      //     prev.map((r) =>
-      //       r.id === id
-      //         ? {
-      //             ...r,
-      //             [editing.field!]:
-      //               editing.field === "keywords"
-      //                 ? (updatedValue as string[])
-      //                 : updatedValue,
-      //           }
-      //         : r
-      //     )
-      //   );
-      // }
+      const data = await response.json();
+
+      if (data.success) {
+        setResults((prev) =>
+          prev.map((r) =>
+            r.id === id
+              ? {
+                  ...r,
+                  ...data.updatedFields,
+                }
+              : r
+          )
+        );
+      }
     } catch (err) {
       console.error("Failed to save edit:", err);
     }
@@ -172,12 +190,11 @@ export default function Home() {
       console.log(`Processed ${data.completed}/${data.total} images`);
 
       setResults((prev) => {
-        const existingIndex = prev.findIndex(
-          (r) => r.fileName === data.currentResult.filename
-        );
-
         const updatedResult: MetadataResult = {
-          id: data.currentResult.id,
+          id:
+            data.currentResult._id ||
+            data.currentResult.id ||
+            crypto.randomUUID(),
           fileName: data.currentResult.filename,
           title: data.currentResult.metadata.title,
           description: data.currentResult.metadata.description,
@@ -189,6 +206,9 @@ export default function Home() {
           imageUrl: `http://localhost:5000${data.currentResult.imageUrl}`,
         };
 
+        const existingIndex = prev.findIndex(
+          (r) => r.fileName === data.currentResult.filename
+        );
         if (existingIndex >= 0) {
           return prev.map((r, i) => (i === existingIndex ? updatedResult : r));
         }
@@ -202,12 +222,49 @@ export default function Home() {
       socket.disconnect();
     });
 
-    socket.on("processComplete", (data) => {
-      console.log({ data });
-      setProcessing(false);
-      setFiles([]);
-      socket.disconnect();
-    });
+    socket.on(
+      "processComplete",
+      (data: {
+        status: string;
+        results: {
+          id: string;
+          downloadable: boolean;
+          data: Array<ServerMetadataResponse>;
+        };
+      }) => {
+        console.log("Process Complete:", data);
+
+        setResults((prev) => {
+          const updatedResults = data.results.data.map((item) => ({
+            id: item._id || crypto.randomUUID(),
+            fileName: item.filename,
+            title: item.metadata.title,
+            description: item.metadata.description,
+            keywords: item.metadata.keywords,
+            status: "completed" as const,
+            imageUrl: `http://localhost:5000${item.imageUrl}`,
+          }));
+
+          // Replace existing results with completed ones
+          return prev.map((prevResult) => {
+            const completedResult = updatedResults.find(
+              (r) => r.fileName === prevResult.fileName
+            );
+            return completedResult || prevResult;
+          });
+        });
+
+        setProcessing(false);
+        setFiles([]);
+        socket.disconnect();
+
+        // Store download info
+        setDownloadInfo({
+          id: data.results.id,
+          downloadable: data.results.downloadable,
+        });
+      }
+    );
 
     socket.on("disconnect", () => {
       console.log("Disconnected from server");
@@ -373,9 +430,17 @@ export default function Home() {
                   </button>
                   <button
                     onClick={() =>
-                      downloadImagesAsZip(results, setIsDownloading)
+                      downloadImagesAsZip(
+                        downloadInfo.id,
+                        downloadInfo.downloadable,
+                        setIsDownloading
+                      )
                     }
-                    disabled={isDownloading.csv || isDownloading.images}
+                    disabled={
+                      isDownloading.csv ||
+                      isDownloading.images ||
+                      !downloadInfo.downloadable
+                    }
                     className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                   >
                     {isDownloading.images ? (
@@ -500,42 +565,59 @@ export default function Home() {
                             {countWords(result.description)}
                           </span>
                         </div>
-                        {/* Similar editing structure as title */}
-                        <div className="flex items-center">
-                          <p className="flex-grow text-sm">
-                            {result.description}
-                          </p>
-                          <div className="flex gap-2 ml-2">
+                        {editing.id === result.id &&
+                        editing.field === "description" ? (
+                          <div className="flex items-center mt-1">
+                            <input
+                              type="text"
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              className="w-full p-2 border rounded-lg mr-2"
+                            />
                             <button
-                              onClick={() =>
-                                startEditing(
-                                  result.id,
-                                  "description",
-                                  result.description
-                                )
-                              }
-                              className="text-gray-400 hover:text-gray-600"
+                              onClick={() => saveEdit(result.id)}
+                              className="text-green-600 hover:text-green-700"
                             >
-                              <PencilIcon className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() =>
-                                copyToClipboard(
-                                  result.description,
-                                  "description",
-                                  result.id
-                                )
-                              }
-                              className="text-gray-400 hover:text-gray-600"
-                            >
-                              {copyStatus[result.id + "description"] ? (
-                                <CheckIcon className="h-4 w-4 text-green-600" />
-                              ) : (
-                                <ClipboardIcon className="h-4 w-4" />
-                              )}
+                              <CheckIcon className="h-5 w-5" />
                             </button>
                           </div>
-                        </div>
+                        ) : (
+                          <div className="flex items-center">
+                            <p className="flex-grow text-sm">
+                              {result.description}
+                            </p>
+                            <div className="flex gap-2 ml-2">
+                              <button
+                                onClick={() =>
+                                  startEditing(
+                                    result.id,
+                                    "description",
+                                    result.description
+                                  )
+                                }
+                                className="text-gray-400 hover:text-gray-600"
+                              >
+                                <PencilIcon className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() =>
+                                  copyToClipboard(
+                                    result.description,
+                                    "description",
+                                    result.id
+                                  )
+                                }
+                                className="text-gray-400 hover:text-gray-600"
+                              >
+                                {copyStatus[result.id + "description"] ? (
+                                  <CheckIcon className="h-4 w-4 text-green-600" />
+                                ) : (
+                                  <ClipboardIcon className="h-4 w-4" />
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       {/* Keywords Section */}
@@ -578,16 +660,35 @@ export default function Home() {
                             </div>
                           </div>
                         </div>
-                        <div className="flex flex-wrap gap-2">
-                          {result.keywords.map((keyword, idx) => (
-                            <span
-                              key={idx}
-                              className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs"
+                        {editing.id === result.id &&
+                        editing.field === "keywords" ? (
+                          <div className="flex items-center mt-1">
+                            <input
+                              type="text"
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              className="w-full p-2 border rounded-lg mr-2"
+                              placeholder="Comma-separated keywords"
+                            />
+                            <button
+                              onClick={() => saveEdit(result.id)}
+                              className="text-green-600 hover:text-green-700"
                             >
-                              {keyword}
-                            </span>
-                          ))}
-                        </div>
+                              <CheckIcon className="h-5 w-5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex flex-wrap gap-2">
+                            {result.keywords.map((keyword, idx) => (
+                              <span
+                                key={idx}
+                                className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs"
+                              >
+                                {keyword}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

@@ -122,10 +122,11 @@ export async function updateImageMetadata(imagePath, updateData) {
       throw new Error("Image path and update data are required");
     }
 
+    // Check if file exists
     try {
-      await fs.access(filePath);
+      await fs.access(imagePath);
     } catch (error) {
-      return;
+      throw new Error(`Image file not accessible: ${error.message}`);
     }
 
     // Validate file extension

@@ -54,50 +54,31 @@ export const downloadCSV = async (
 };
 
 export const downloadImagesAsZip = async (
-  results: MetadataResult[],
+  id: string,
+  downloadable: boolean,
   setDownloading: SetDownloadingState
 ) => {
-  if (!results.length) return;
+  if (!downloadable) {
+    console.log("Images not ready for download");
+    return;
+  }
 
   setDownloading((prev) => ({ ...prev, images: true }));
 
   try {
-    // Dynamically import JSZip only when needed
-    const JSZip = (await import("jszip")).default;
-    const zip = new JSZip();
+    const response = await fetch(
+      `http://localhost:5000/api/images/download/${id}`
+    );
+    const blob = await response.blob();
 
-    // Create a folder for the images
-    const imgFolder = zip.folder("images");
-    if (!imgFolder) return;
-
-    // Download each image and add to zip
-    const fetchPromises = results.map(async (result) => {
-      if (!result.imageUrl) return;
-
-      try {
-        const response = await fetch(result.imageUrl);
-        const blob = await response.blob();
-
-        // Get file extension from URL or default to jpg
-        const extension = result.imageUrl.split(".").pop() || "jpg";
-        const sanitizedFileName = result.fileName.replace(/[^a-zA-Z0-9]/g, "_");
-
-        imgFolder.file(`${sanitizedFileName}.${extension}`, blob);
-      } catch (error) {
-        console.error(`Failed to download ${result.fileName}:`, error);
-      }
-    });
-
-    await Promise.all(fetchPromises);
-
-    // Generate and download zip
-    const content = await zip.generateAsync({ type: "blob" });
     const link = document.createElement("a");
-    link.href = URL.createObjectURL(content);
+    link.href = URL.createObjectURL(blob);
     link.setAttribute("download", `images_${new Date().toISOString()}.zip`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  } catch (error) {
+    console.error("Failed to download images:", error);
   } finally {
     setDownloading((prev) => ({ ...prev, images: false }));
   }
