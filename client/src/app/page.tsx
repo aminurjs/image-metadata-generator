@@ -1,25 +1,20 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import {
-  ArrowUpTrayIcon,
-  XMarkIcon,
-  ClipboardIcon,
-  PencilIcon,
-  CheckIcon,
-  ArrowDownTrayIcon,
-  PhotoIcon,
-} from "@heroicons/react/24/outline";
+import { ArrowDownTrayIcon, PhotoIcon } from "@heroicons/react/24/outline";
 import {
   EditingState,
   MetadataResult,
   ProcessProgressData,
   ServerMetadataResponse,
 } from "@/types";
-import { countWords, downloadCSV, downloadImagesAsZip } from "@/actions";
+import { downloadCSV, downloadImagesAsZip } from "@/actions";
 import { io } from "socket.io-client";
 import { Socket } from "socket.io-client";
-import Image from "next/image";
+import { FileUpload } from "@/components/FileUpload";
+import { FileList } from "@/components/FileList";
+import { MetadataEditor } from "@/components/MetadataEditor";
+import { Toaster } from "react-hot-toast";
 
 export default function Home() {
   const [files, setFiles] = useState<File[]>([]);
@@ -286,6 +281,7 @@ export default function Home() {
       }
 
       const formData = new FormData();
+      formData.append("existingId", downloadInfo.id);
       files.forEach((file) => {
         formData.append("images", file);
       });
@@ -327,372 +323,87 @@ export default function Home() {
 
   return (
     <main className="min-h-screen p-8 bg-gray-50">
+      <Toaster position="top-right" />
       <div className="max-w-4xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-800">
-            AI Metadata Generator
-          </h1>
-        </div>
+        <h1 className="text-4xl font-bold text-gray-800 mb-8">
+          AI Metadata Generator
+        </h1>
 
-        {/* Upload Area */}
-        <div
-          onDrop={onDrop}
-          onDragOver={(e) => e.preventDefault()}
-          className="border-2 border-dashed border-gray-300 rounded-lg p-8 mb-8 text-center bg-white shadow-sm hover:border-primary transition-colors"
-        >
-          <ArrowUpTrayIcon className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-          <p className="text-lg mb-4 text-gray-600">
-            Drag and drop your images here, or
-          </p>
-          <label className="bg-primary text-white px-6 py-2 rounded-lg cursor-pointer hover:bg-blue-600 transition-colors inline-block">
-            Browse Files
-            <input
-              type="file"
-              multiple
-              accept="image/jpeg,image/png,image/webp"
-              className="hidden"
-              onChange={handleFileSelect}
-            />
-          </label>
-          <p className="mt-2 text-sm text-gray-500">
-            Supported formats: JPEG, PNG, WebP
-          </p>
-        </div>
+        <FileUpload onDrop={onDrop} handleFileSelect={handleFileSelect} />
 
-        {/* Error Display */}
         {error && (
           <div className="mb-8 p-4 bg-red-50 border border-red-200 rounded-lg text-red-600">
             {error}
           </div>
         )}
 
-        {/* File List with Previews */}
         {files.length > 0 && (
-          <div className="mb-8 bg-white p-6 rounded-lg shadow-sm">
-            <h2 className="text-xl font-semibold mb-4 text-gray-800">
-              Selected Files
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {files.map((file, index) => (
-                <div
-                  key={index}
-                  className="flex items-center p-3 bg-gray-50 rounded-lg"
-                >
-                  <div className="w-20 h-20 mr-3 flex-shrink-0">
-                    {previews[file.name] && (
-                      <img
-                        src={previews[file.name]}
-                        alt={file.name}
-                        className="w-full h-full object-cover rounded-lg"
-                      />
-                    )}
-                  </div>
-                  <div className="flex-grow">
-                    <span className="text-gray-700 break-all">{file.name}</span>
-                  </div>
-                  <button
-                    onClick={() => removeFile(index)}
-                    className="text-gray-400 hover:text-red-500 transition-colors ml-2"
-                  >
-                    <XMarkIcon className="h-5 w-5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-            <button
-              onClick={processFiles}
-              disabled={processing}
-              className="mt-4 bg-primary text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed w-full"
-            >
-              {processing ? "Processing..." : "Generate Metadata"}
-            </button>
-          </div>
+          <FileList
+            files={files}
+            previews={previews}
+            removeFile={removeFile}
+            processFiles={processFiles}
+            processing={processing}
+          />
         )}
 
-        {/* Results with Previews and Counters */}
         {results.length > 0 && (
           <div className="bg-white p-6 rounded-lg shadow-sm">
             <div className="flex items-center justify-between mb-8">
               <h2 className="text-xl font-semibold text-gray-800">Results</h2>
-              {results.length > 0 && (
-                <div className="flex gap-4">
-                  <button
-                    onClick={() => downloadCSV(results, setIsDownloading)}
-                    disabled={isDownloading.csv || isDownloading.images}
-                    className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-                  >
-                    {isDownloading.csv ? (
-                      <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent mr-2" />
-                    ) : (
-                      <ArrowDownTrayIcon className="h-5 w-5 mr-2" />
-                    )}
-                    Export CSV
-                  </button>
-                  <button
-                    onClick={() =>
-                      downloadImagesAsZip(
-                        downloadInfo.id,
-                        downloadInfo.downloadable,
-                        setIsDownloading
-                      )
-                    }
-                    disabled={
-                      isDownloading.csv ||
-                      isDownloading.images ||
-                      !downloadInfo.downloadable
-                    }
-                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-                  >
-                    {isDownloading.images ? (
-                      <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent mr-2" />
-                    ) : (
-                      <PhotoIcon className="h-5 w-5 mr-2" />
-                    )}
-                    Download Images
-                  </button>
-                </div>
-              )}
+              <div className="flex gap-4">
+                <button
+                  onClick={() => downloadCSV(results, setIsDownloading)}
+                  disabled={
+                    isDownloading.csv || isDownloading.images || processing
+                  }
+                  className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {isDownloading.csv ? (
+                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent mr-2" />
+                  ) : (
+                    <ArrowDownTrayIcon className="h-5 w-5 mr-2" />
+                  )}
+                  Export CSV
+                </button>
+                <button
+                  onClick={() =>
+                    downloadImagesAsZip(
+                      downloadInfo.id,
+                      downloadInfo.downloadable,
+                      setIsDownloading
+                    )
+                  }
+                  disabled={
+                    isDownloading.csv ||
+                    isDownloading.images ||
+                    !downloadInfo.downloadable ||
+                    processing
+                  }
+                  className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {isDownloading.images ? (
+                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent mr-2" />
+                  ) : (
+                    <PhotoIcon className="h-5 w-5 mr-2" />
+                  )}
+                  Download Images
+                </button>
+              </div>
             </div>
             <div className="space-y-6">
               {results.map((result) => (
-                <div key={result.id} className="p-4 bg-gray-50 rounded-lg">
-                  <div className="flex gap-6">
-                    {/* Image Preview */}
-                    <div className="w-48 h-48 flex-shrink-0 relative">
-                      <Image
-                        src={`${result.imageUrl}` || previews[result.fileName]}
-                        width={300}
-                        height={300}
-                        alt={result.fileName}
-                        className="w-full h-full object-cover rounded-lg"
-                      />
-                      {result.status === "processing" && (
-                        <div className="absolute inset-0 bg-black bg-opacity-50 rounded-lg flex items-center justify-center">
-                          <div className="animate-spin rounded-full h-8 w-8 border-4 border-white border-t-transparent"></div>
-                        </div>
-                      )}
-                      {result.status === "failed" && (
-                        <div className="absolute inset-0 bg-red-500 bg-opacity-50 rounded-lg flex items-center justify-center">
-                          <XMarkIcon className="h-8 w-8 text-white" />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Metadata Content */}
-                    <div className="flex-1">
-                      {/* Filename and Status */}
-                      <div className="flex justify-between items-center mb-4">
-                        <h3 className="font-medium text-gray-700 ellipsis-clamp">
-                          {result.fileName}
-                        </h3>
-                        <span
-                          className={`px-2 py-1 text-xs rounded-full ${
-                            result.status === "completed"
-                              ? "bg-green-100 text-green-700"
-                              : result.status === "processing"
-                              ? "bg-blue-100 text-blue-700"
-                              : "bg-red-100 text-red-700"
-                          }`}
-                        >
-                          {result.status.charAt(0).toUpperCase() +
-                            result.status.slice(1)}
-                        </span>
-                      </div>
-
-                      {/* Title Section */}
-                      <div className="mb-4">
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="font-medium">Title:</span>
-                          <span className="text-sm text-gray-500">
-                            {result.title.length} | {countWords(result.title)}
-                          </span>
-                        </div>
-                        {editing.id === result.id &&
-                        editing.field === "title" ? (
-                          <div className="flex items-center mt-1">
-                            <input
-                              type="text"
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                              className="w-full p-2 border rounded-lg mr-2"
-                            />
-                            <button
-                              onClick={() => saveEdit(result.id)}
-                              className="text-green-600 hover:text-green-700"
-                            >
-                              <CheckIcon className="h-5 w-5" />
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center">
-                            <p className="flex-grow text-sm">{result.title}</p>
-                            <div className="flex gap-2 ml-2">
-                              <button
-                                onClick={() =>
-                                  startEditing(result.id, "title", result.title)
-                                }
-                                className="text-gray-400 hover:text-gray-600"
-                              >
-                                <PencilIcon className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() =>
-                                  copyToClipboard(
-                                    result.title,
-                                    "title",
-                                    result.id
-                                  )
-                                }
-                                className="text-gray-400 hover:text-gray-600"
-                              >
-                                {copyStatus[result.id + "title"] ? (
-                                  <CheckIcon className="h-4 w-4 text-green-600" />
-                                ) : (
-                                  <ClipboardIcon className="h-4 w-4" />
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Description Section */}
-                      <div className="mb-4">
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="font-medium">Description:</span>
-                          <span className="text-sm text-gray-500">
-                            {result.description.length} |{" "}
-                            {countWords(result.description)}
-                          </span>
-                        </div>
-                        {editing.id === result.id &&
-                        editing.field === "description" ? (
-                          <div className="flex items-center mt-1">
-                            <input
-                              type="text"
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                              className="w-full p-2 border rounded-lg mr-2"
-                            />
-                            <button
-                              onClick={() => saveEdit(result.id)}
-                              className="text-green-600 hover:text-green-700"
-                            >
-                              <CheckIcon className="h-5 w-5" />
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center">
-                            <p className="flex-grow text-sm">
-                              {result.description}
-                            </p>
-                            <div className="flex gap-2 ml-2">
-                              <button
-                                onClick={() =>
-                                  startEditing(
-                                    result.id,
-                                    "description",
-                                    result.description
-                                  )
-                                }
-                                className="text-gray-400 hover:text-gray-600"
-                              >
-                                <PencilIcon className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() =>
-                                  copyToClipboard(
-                                    result.description,
-                                    "description",
-                                    result.id
-                                  )
-                                }
-                                className="text-gray-400 hover:text-gray-600"
-                              >
-                                {copyStatus[result.id + "description"] ? (
-                                  <CheckIcon className="h-4 w-4 text-green-600" />
-                                ) : (
-                                  <ClipboardIcon className="h-4 w-4" />
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Keywords Section */}
-                      <div>
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="font-medium">Keywords:</span>
-                          <div className="flex items-center gap-4">
-                            <span className="text-sm text-gray-500">
-                              {result.keywords.length} keywords
-                            </span>
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() =>
-                                  startEditing(
-                                    result.id,
-                                    "keywords",
-                                    result.keywords
-                                  )
-                                }
-                                className="text-gray-400 hover:text-gray-600"
-                              >
-                                <PencilIcon className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() =>
-                                  copyToClipboard(
-                                    result.keywords.join(", "),
-                                    "keywords",
-                                    result.id
-                                  )
-                                }
-                                className="text-gray-400 hover:text-gray-600"
-                              >
-                                {copyStatus[result.id + "keywords"] ? (
-                                  <CheckIcon className="h-4 w-4 text-green-600" />
-                                ) : (
-                                  <ClipboardIcon className="h-4 w-4" />
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                        {editing.id === result.id &&
-                        editing.field === "keywords" ? (
-                          <div className="flex items-center mt-1">
-                            <input
-                              type="text"
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                              className="w-full p-2 border rounded-lg mr-2"
-                              placeholder="Comma-separated keywords"
-                            />
-                            <button
-                              onClick={() => saveEdit(result.id)}
-                              className="text-green-600 hover:text-green-700"
-                            >
-                              <CheckIcon className="h-5 w-5" />
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex flex-wrap gap-2">
-                            {result.keywords.map((keyword, idx) => (
-                              <span
-                                key={idx}
-                                className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs"
-                              >
-                                {keyword}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <MetadataEditor
+                  key={result.id}
+                  result={result}
+                  editing={editing}
+                  editValue={editValue}
+                  setEditValue={setEditValue}
+                  startEditing={startEditing}
+                  saveEdit={saveEdit}
+                  copyToClipboard={copyToClipboard}
+                  copyStatus={copyStatus}
+                />
               ))}
             </div>
           </div>

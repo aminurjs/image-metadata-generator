@@ -1,71 +1,89 @@
-import fs from "fs";
+import express from "express";
+import multer from "multer";
+import { fileURLToPath } from "url";
 import path from "path";
-import { generate } from "./services/ai/gemini.service.js";
+import { createServer } from "http";
+import { Server } from "socket.io";
+import {
+  clearProcessedDirectory,
+  processMultipleImages,
+} from "./controllers/image.controller.js";
+import { connectDB } from "./config/database.js";
+import cors from "cors";
+import { config } from "./config/base.js";
+import imageRoute from "./routes/image.routes.js";
 
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-let loadingInterval;
+// Connect to MongoDB
+connectDB();
 
-// Function to show loading animation at the bottom
-function startLoading() {
-  const frames = ["|", "/", "-", "\\"];
-  let i = 0;
-  process.stdout.write("\n");
-  loadingInterval = setInterval(() => {
-    process.stdout.write(`\rProcessing files... ${frames[i++]}`);
-    if (i >= frames.length) i = 0;
-  }, 200);
-}
+const app = express();
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: config.corsOrigin,
+    credentials: true,
+  },
+});
 
-function stopLoading() {
-  clearInterval(loadingInterval);
-  process.stdout.write("\rProcessing completed!\n\n");
-}
+// Configure multer storage
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "public/uploads/original/");
+  },
+  filename: (req, file, cb) => {
+    cb(null, file.originalname);
+  },
+});
 
-// Function to process valid files
-async function processFile(filePath, ext, index, file) {
-  try {
-    const result = await generate(
-      filePath,
-      ext,
-      "D:\\Freepik\\Assets\\Calligraphy\\test"
-    );
-    console.log(result);
-    process.stdout.clearLine(0);
-    process.stdout.cursorTo(0);
-    console.log(`\x1b[32m%s\x1b[0m`, `${index + 1}. ${file} Success`);
-  } catch (error) {
-    console.error(error);
-  }
-}
+app.use(express.json());
+app.use(
+  cors({
+    origin: config.corsOrigin,
+    credentials: true,
+  })
+);
 
-async function getAllFilePaths(dir) {
-  const files = fs.readdirSync(dir);
-  const allowedExtensions = ["jpg", "jpeg", "png", "webp"];
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+});
 
-  let index = 0;
-  for (const file of files) {
-    const filePath = path.join(dir, file);
-    const stats = fs.statSync(filePath);
+// Socket.IO connection handler
+io.on("connection", (socket) => {
+  console.log("Client connected:", socket.id);
 
-    if (stats.isDirectory()) {
-      await getAllFilePaths(filePath);
-    } else {
-      const ext = path.extname(file).toLowerCase().slice(1);
-      if (allowedExtensions.includes(ext)) {
-        await processFile(filePath, ext, index, file);
-        index++;
-        await delay(1000);
-      }
-    }
-  }
-}
+  socket.on("disconnect", () => {
+    console.log("Client disconnected:", socket.id);
+  });
+});
 
-// Usage
-(async () => {
-  const folderPath = "D:\\Freepik\\Assets\\Calligraphy";
-  startLoading();
-  await getAllFilePaths(folderPath);
-  stopLoading();
-  process.exit(0);
-})();
+// Change to handle multiple images
+app.post("/api/process-images", upload.array("images", 10), (req, res) =>
+  processMultipleImages(req, res, io)
+);
+
+app.use("/api/images", imageRoute);
+
+app.use(
+  "/processed",
+  express.static(path.join(__dirname, "../public/processed"))
+);
+
+const PORT = config.port;
+httpServer.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
+
+// Handle unhandled promise rejections
+process.on("unhandledRejection", (err) => {
+  console.log("UNHANDLED REJECTION! 💥 Shutting down...");
+  console.log(err.name, err.message);
+  process.exit(1);
+});
+
+clearProcessedDirectory();

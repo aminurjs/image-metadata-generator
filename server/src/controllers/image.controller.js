@@ -24,7 +24,7 @@ export async function processMultipleImages(req, res, io) {
 
   try {
     // Create a unique directory for each request
-    const requestId = uuidv4();
+    const requestId = req.body?.existingId || uuidv4();
     const requestDir = path.join(PROCESSED_DIR, requestId);
     await fs.mkdir(requestDir, { recursive: true });
 
@@ -96,12 +96,9 @@ export async function downloadProcessedImages(req, res) {
 
   try {
     // Check if directory exists
-    const dirExists = await fs
-      .access(requestDir)
-      .then(() => true)
-      .catch(() => false);
-
-    if (!dirExists) {
+    try {
+      await fs.access(requestDir);
+    } catch {
       return res.status(404).json({ error: "Directory not found or expired" });
     }
 
@@ -112,16 +109,16 @@ export async function downloadProcessedImages(req, res) {
     archive.pipe(output);
     archive.directory(requestDir, false);
 
-    // Ensure ZIP file is finalized before proceeding
-    await archive.finalize();
+    // Finalize ZIP creation
+    archive.finalize();
 
-    output.on("close", async () => {
+    output.on("close", () => {
       res.download(zipPath, `${requestId}.zip`, async (err) => {
         if (err) {
           console.error("Error sending ZIP file:", err.message);
           return res.status(500).json({ error: "Failed to send ZIP file" });
         }
-        // Optionally delete the ZIP file after download
+
         try {
           await fs.rm(zipPath, { force: true });
         } catch (rmError) {

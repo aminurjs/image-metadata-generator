@@ -1,4 +1,5 @@
 import { MetadataResult } from "@/types";
+import toast from "react-hot-toast";
 
 type DownloadState = {
   csv: boolean;
@@ -59,7 +60,7 @@ export const downloadImagesAsZip = async (
   setDownloading: SetDownloadingState
 ) => {
   if (!downloadable) {
-    console.log("Images not ready for download");
+    toast.error("Images not ready for download");
     return;
   }
 
@@ -69,7 +70,16 @@ export const downloadImagesAsZip = async (
     const response = await fetch(
       `http://localhost:5000/api/images/download/${id}`
     );
+
+    if (response.status === 404 || response.status === 500) {
+      throw new Error("Download URL is not valid");
+    }
+
     const blob = await response.blob();
+
+    if (blob.size === 0) {
+      throw new Error("Downloaded file is empty");
+    }
 
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
@@ -77,8 +87,12 @@ export const downloadImagesAsZip = async (
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    toast.success("Download started");
   } catch (error) {
     console.error("Failed to download images:", error);
+    toast.error(
+      error instanceof Error ? error.message : "Failed to download images"
+    );
   } finally {
     setDownloading((prev) => ({ ...prev, images: false }));
   }
