@@ -9,7 +9,6 @@ export const updateImage = async (req, res) => {
     PROCESSED_DIR,
     imagePath.replace(/^\/processed\//, "")
   );
-  console.log(requestDir, updateData);
   try {
     await updateImageMetadata(requestDir, updateData);
 

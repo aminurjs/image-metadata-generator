@@ -3,7 +3,11 @@
     "install:all": "npm install && cd client && npm install && cd ../server && npm install",
     "client": "cd client && npm run dev",
     "server": "cd server && npm run dev",
-    "dev": "concurrently \"npm run client\" \"npm run server\""
+    "client:start": "cd client && npm start",
+    "server:start": "cd server && npm start",
+    "build": "cd client && npm run build",
+    "dev": "concurrently \"npm run client\" \"npm run server\"",
+    "start": "concurrently \"npm run client:start\" \"npm run server:start\""
   },
   "devDependencies": {
     "concurrently": "^9.1.0"
