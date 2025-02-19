@@ -130,13 +130,16 @@ export default function Home() {
       // Add check for imageUrl
       if (!result.imageUrl) return;
 
-      const response = await fetch(`http://localhost:5000/api/images/update`, {
+      const response = await fetch(`/api/images/update`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          imagePath: result.imageUrl.replace("http://localhost:5000", ""),
+          imagePath: result.imageUrl.replace(
+            "https://image-metadata-generator-server.vercel.app",
+            ""
+          ),
           _id: result.id,
           updateData,
         }),
@@ -165,7 +168,7 @@ export default function Home() {
 
   // Remove the useEffect for socket initialization and move the socket setup to a new function
   const setupSocket = () => {
-    const socket = io("http://localhost:5000", {
+    const socket = io("https://image-metadata-generator-server.vercel.app", {
       transports: ["websocket"],
       autoConnect: true,
     });
@@ -198,7 +201,7 @@ export default function Home() {
             data.currentResult.status === "progress"
               ? "processing"
               : "completed",
-          imageUrl: `http://localhost:5000${data.currentResult.imageUrl}`,
+          imageUrl: `https://image-metadata-generator-server.vercel.app${data.currentResult.imageUrl}`,
         };
 
         const existingIndex = prev.findIndex(
@@ -237,7 +240,7 @@ export default function Home() {
             description: item.metadata.description,
             keywords: item.metadata.keywords,
             status: "completed" as const,
-            imageUrl: `http://localhost:5000${item.imageUrl}`,
+            imageUrl: `https://image-metadata-generator-server.vercel.app${item.imageUrl}`,
           }));
 
           // Replace existing results with completed ones
@@ -299,7 +302,7 @@ export default function Home() {
 
       setResults((prev) => [...prev, ...initialResults]);
 
-      const response = await fetch("http://localhost:5000/api/process-images", {
+      const response = await fetch("/api/process-images", {
         method: "POST",
         body: formData,
       });

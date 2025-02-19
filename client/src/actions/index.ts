@@ -67,9 +67,7 @@ export const downloadImagesAsZip = async (
   setDownloading((prev) => ({ ...prev, images: true }));
 
   try {
-    const response = await fetch(
-      `http://localhost:5000/api/images/download/${id}`
-    );
+    const response = await fetch(`/api/images/download/${id}`);
 
     if (response.status === 404 || response.status === 500) {
       throw new Error("Download URL is not valid");
