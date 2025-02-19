@@ -13,8 +13,7 @@ import cors from "cors";
 import { config } from "./config/base.js";
 import imageRoute from "./routes/image.routes.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const rootDir = process.cwd();
 
 // Connect to MongoDB
 connectDB();
@@ -69,10 +68,7 @@ app.post("/api/process-images", upload.array("images", 10), (req, res) =>
 
 app.use("/api/images", imageRoute);
 
-app.use(
-  "/processed",
-  express.static(path.join(__dirname, "../public/processed"))
-);
+app.use("/processed", express.static(path.join(rootDir, "public/processed")));
 
 const PORT = config.port;
 httpServer.listen(PORT, () => {
