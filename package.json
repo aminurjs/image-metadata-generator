@@ -11,5 +11,8 @@
   },
   "devDependencies": {
     "concurrently": "^9.1.0"
+  },
+  "dependencies": {
+    "idb": "^8.0.2"
   }
 }

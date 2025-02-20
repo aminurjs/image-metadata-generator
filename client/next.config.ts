@@ -7,8 +7,7 @@ const nextConfig = {
     return [
       {
         source: "/api/:path*",
-        destination:
-          "https://image-metadata-generator-server.vercel.app/api/:path*",
+        destination: "http://localhost:5000/api/:path*",
       },
     ];
   },

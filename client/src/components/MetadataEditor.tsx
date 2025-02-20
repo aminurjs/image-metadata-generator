@@ -51,7 +51,7 @@ export const MetadataEditor = ({
 
       <div className="flex-1">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="font-medium text-gray-700 truncate">
+          <h3 className="font-medium text-gray-700 ellipsis-clamp">
             {result.fileName}
           </h3>
           <span

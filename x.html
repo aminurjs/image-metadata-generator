@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <input type="file" id="folderInput" webkitdirectory directory multiple />
+    <ul id="fileList"></ul>
+
+    <!-- Modal for Image Preview -->
+    <div
+      id="imageModal"
+      style="
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.8);
+        justify-content: center;
+        align-items: center;
+      "
+    >
+      <img
+        id="modalImg"
+        style="max-width: 90vw; max-height: 90vh; border-radius: 8px"
+      />
+    </div>
+
+    <script>
+      document
+        .getElementById("folderInput")
+        .addEventListener("change", function (event) {
+          const files = event.target.files;
+          const fileList = document.getElementById("fileList");
+          fileList.innerHTML = ""; // Clear previous list
+
+          const allowedExtensions = [
+            "jpg",
+            "jpeg",
+            "png",
+            "gif",
+            "webp",
+            "svg",
+          ]; // Allowed image types
+          const fileMap = new Map(); // Use a Map to maintain correct structure
+
+          for (const file of files) {
+            const ext = file.name.split(".").pop().toLowerCase(); // Get file extension
+            if (!allowedExtensions.includes(ext)) continue; // Skip non-image files
+
+            const pathParts = file.webkitRelativePath.split("/"); // Split path by folders
+            let current = fileMap;
+
+            // Traverse and create nested structure
+            for (let i = 0; i < pathParts.length; i++) {
+              const part = pathParts[i];
+
+              if (i === pathParts.length - 1) {
+                current.set(part, file); // Store file at the last level
+              } else {
+                if (!current.has(part)) current.set(part, new Map()); // Create folder if not exists
+                current = current.get(part); // Move deeper
+              }
+            }
+          }
+
+          // Function to display image files and folders recursively
+          function displayFiles(obj, parentElement) {
+            const ul = document.createElement("ul");
+            parentElement.appendChild(ul);
+
+            for (const [key, value] of obj) {
+              const li = document.createElement("li");
+
+              if (value instanceof Map) {
+                li.textContent = key; // Show folder name
+                ul.appendChild(li);
+                displayFiles(value, li); // Recursively display subfolders
+              } else {
+                const img = document.createElement("img");
+                img.src = URL.createObjectURL(value); // Create image preview
+                img.style.width = "100px"; // Thumbnail size
+                img.style.cursor = "pointer";
+                img.style.margin = "5px";
+                img.style.borderRadius = "5px";
+
+                // Show image in modal on click
+                img.onclick = function () {
+                  document.getElementById("modalImg").src = img.src;
+                  document.getElementById("imageModal").style.display = "flex";
+                };
+
+                li.appendChild(img);
+                ul.appendChild(li);
+              }
+            }
+          }
+
+          displayFiles(fileMap, fileList);
+        });
+
+      // Close modal when clicking outside the image or pressing Esc
+      const modal = document.getElementById("imageModal");
+      modal.addEventListener("click", function (event) {
+        if (event.target === modal) modal.style.display = "none";
+      });
+
+      document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") modal.style.display = "none";
+      });
+    </script>
+  </body>
+</html>
